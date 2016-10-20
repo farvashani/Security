@@ -449,6 +449,7 @@ namespace Microsoft.AspNetCore.Authentication.OpenIdConnect
             }
 
             AuthenticateResult result;
+            AuthenticationTicket ticket = null;
 
             try
             {
@@ -518,7 +519,6 @@ namespace Microsoft.AspNetCore.Authentication.OpenIdConnect
 
                 PopulateSessionProperties(authorizationResponse, properties);
 
-                AuthenticationTicket ticket = null;
                 JwtSecurityToken jwt = null;
                 string nonce = null;
                 var validationParameters = Options.TokenValidationParameters.Clone();
@@ -578,7 +578,7 @@ namespace Microsoft.AspNetCore.Authentication.OpenIdConnect
                         tokenEndpointResponse = await RedeemAuthorizationCodeAsync(tokenEndpointRequest);
                     }
 
-                    var tokenResponseReceivedContext = await RunTokenResponseReceivedEventAsync(authorizationResponse, tokenEndpointResponse, properties);
+                    var tokenResponseReceivedContext = await RunTokenResponseReceivedEventAsync(authorizationResponse, tokenEndpointResponse, properties, ticket);
                     if (tokenResponseReceivedContext.CheckEventResult(out result))
                     {
                         return result;
@@ -654,7 +654,7 @@ namespace Microsoft.AspNetCore.Authentication.OpenIdConnect
                     }
                 }
 
-                var authenticationFailedContext = await RunAuthenticationFailedEventAsync(authorizationResponse, exception);
+                var authenticationFailedContext = await RunAuthenticationFailedEventAsync(authorizationResponse, ticket, exception);
                 if (authenticationFailedContext.CheckEventResult(out result))
                 {
                     return result;
@@ -1038,13 +1038,15 @@ namespace Microsoft.AspNetCore.Authentication.OpenIdConnect
         private async Task<TokenResponseReceivedContext> RunTokenResponseReceivedEventAsync(
             OpenIdConnectMessage message,
             OpenIdConnectMessage tokenEndpointResponse,
-            AuthenticationProperties properties)
+            AuthenticationProperties properties,
+            AuthenticationTicket ticket)
         {
             Logger.TokenResponseReceived();
             var eventContext = new TokenResponseReceivedContext(Context, Options, properties)
             {
                 ProtocolMessage = message,
-                TokenEndpointResponse = tokenEndpointResponse
+                TokenEndpointResponse = tokenEndpointResponse,
+                Ticket = ticket
             };
 
             await Options.Events.TokenResponseReceived(eventContext);
@@ -1084,11 +1086,13 @@ namespace Microsoft.AspNetCore.Authentication.OpenIdConnect
             return userInformationReceivedContext;
         }
 
-        private async Task<AuthenticationFailedContext> RunAuthenticationFailedEventAsync(OpenIdConnectMessage message, Exception exception)
+        private async Task<AuthenticationFailedContext> RunAuthenticationFailedEventAsync(OpenIdConnectMessage message,
+            AuthenticationTicket ticket, Exception exception)
         {
             var authenticationFailedContext = new AuthenticationFailedContext(Context, Options)
             {
                 ProtocolMessage = message,
+                Ticket = ticket,
                 Exception = exception
             };
 
